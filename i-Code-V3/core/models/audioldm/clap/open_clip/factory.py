@@ -81,7 +81,7 @@ def create_model(
     pretrained_text: str = "",
     enable_fusion: bool = False,
     fusion_type: str = "None",
-    joint_embed_shape: int = 512
+    joint_embed_shape: int = 512,
 ):
     amodel_name = amodel_name.replace(
         "/", "-"
@@ -131,7 +131,7 @@ def create_model(
         model_cfg["enable_fusion"] = enable_fusion
         model_cfg["fusion_type"] = fusion_type
         model_cfg["joint_embed_shape"] = joint_embed_shape
-        
+
         model = CLAP(**model_cfg)
 
         if pretrained:

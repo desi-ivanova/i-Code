@@ -459,7 +459,9 @@ class CLAP(nn.Module):
         # audio branch
         # audio branch parameters
         if audio_cfg.model_type == "PANN":
-            self.audio_branch = create_pann_model(audio_cfg, enable_fusion, fusion_type, embed_shape, depth)
+            self.audio_branch = create_pann_model(
+                audio_cfg, enable_fusion, fusion_type, embed_shape, depth
+            )
         elif audio_cfg.model_type == "HTSAT":
             self.audio_branch = create_htsat_model(
                 audio_cfg, enable_fusion, fusion_type, embed_shape, depth
@@ -491,7 +493,6 @@ class CLAP(nn.Module):
         return self.audio_branch(
             audio, mixup_lambda=None, device=device
         )  # mix lambda needs to add
-
 
     def encode_text(self, text, device):
         if self.text_branch_type == "transformer":
@@ -739,7 +740,6 @@ def convert_weights_to_fp16(model: nn.Module):
 def build_model_from_openai_state_dict(
     state_dict: dict, model_cfg, enable_fusion: bool = False, fusion_type: str = "None"
 ):
-
     embed_dim = model_cfg["embed_dim"]
     audio_cfg = model_cfg["audio_cfg"]
     text_cfg = model_cfg["text_cfg"]

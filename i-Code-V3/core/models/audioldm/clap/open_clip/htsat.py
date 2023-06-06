@@ -26,6 +26,7 @@ from .utils import do_mixup, interpolate
 
 from .feature_fusion import iAFF, AFF, DAF
 
+
 # from PyTorch internals
 def _ntuple(n):
     def parse(x):
@@ -372,7 +373,6 @@ class WindowAttention(nn.Module):
         attn_drop=0.0,
         proj_drop=0.0,
     ):
-
         super().__init__()
         self.dim = dim
         self.window_size = window_size  # Wh, Ww
@@ -716,7 +716,6 @@ class BasicLayer(nn.Module):
         use_checkpoint=False,
         norm_before_mlp="ln",
     ):
-
         super().__init__()
         self.dim = dim
         self.input_resolution = input_resolution
@@ -1095,7 +1094,7 @@ class HTSAT_Swin_Transformer(nn.Module):
         x = x[:, :, :, cur_pos : cur_pos + self.spec_size]
         x = x.repeat(repeats=(1, 1, 4, 1))
         return x
-    
+
     def init_spec(self, example):
         window = "hann"
         center = True
@@ -1105,43 +1104,54 @@ class HTSAT_Swin_Transformer(nn.Module):
         top_db = None
         interpolate_ratio = 32  # Downsampled ratio
         # Spectrogram extractor
-        self.spectrogram_extractor = Spectrogram(
-            n_fft=self.config.window_size,
-            hop_length=self.config.hop_size,
-            win_length=self.config.window_size,
-            window=window,
-            center=center,
-            pad_mode=pad_mode,
-            freeze_parameters=True,
-        ).to(example.device).float()
+        self.spectrogram_extractor = (
+            Spectrogram(
+                n_fft=self.config.window_size,
+                hop_length=self.config.hop_size,
+                win_length=self.config.window_size,
+                window=window,
+                center=center,
+                pad_mode=pad_mode,
+                freeze_parameters=True,
+            )
+            .to(example.device)
+            .float()
+        )
         # Logmel feature extractor
-        self.logmel_extractor = LogmelFilterBank(
-            sr=self.config.sample_rate,
-            n_fft=self.config.window_size,
-            n_mels=self.config.mel_bins,
-            fmin=self.config.fmin,
-            fmax=self.config.fmax,
-            ref=ref,
-            amin=amin,
-            top_db=top_db,
-            freeze_parameters=True,
-        ).to(example.device).float()
-        
+        self.logmel_extractor = (
+            LogmelFilterBank(
+                sr=self.config.sample_rate,
+                n_fft=self.config.window_size,
+                n_mels=self.config.mel_bins,
+                fmin=self.config.fmin,
+                fmax=self.config.fmax,
+                ref=ref,
+                amin=amin,
+                top_db=top_db,
+                freeze_parameters=True,
+            )
+            .to(example.device)
+            .float()
+        )
+
     def forward(
         self, x: torch.Tensor, mixup_lambda=None, infer_mode=False, device=None
     ):  # out_feat_keys: List[str] = None):
-
         if self.enable_fusion and x["longer"].sum() == 0:
             # if no audio is longer than 10s, then randomly select one audio to be longer
             x["longer"][torch.randint(0, x["longer"].shape[0], (1,))] = True
 
         if not self.enable_fusion:
             x = x["waveform"].to(device=device, non_blocking=True)
-            if not hasattr(self, 'spectrogram_extractor'):
+            if not hasattr(self, "spectrogram_extractor"):
                 self.init_spec(x)
-            temp_dtype = x.dtype    
-            x = self.spectrogram_extractor(x.float())  # (batch_size, 1, time_steps, freq_bins)
-            x = self.logmel_extractor(x).to(temp_dtype)  # (batch_size, 1, time_steps, mel_bins)
+            temp_dtype = x.dtype
+            x = self.spectrogram_extractor(
+                x.float()
+            )  # (batch_size, 1, time_steps, freq_bins)
+            x = self.logmel_extractor(x).to(
+                temp_dtype
+            )  # (batch_size, 1, time_steps, mel_bins)
             x = x.transpose(1, 3)
             x = self.bn0(x)
             x = x.transpose(1, 3)
@@ -1218,9 +1228,14 @@ class HTSAT_Swin_Transformer(nn.Module):
         return output_dict
 
 
-def create_htsat_model(audio_cfg, enable_fusion=False, fusion_type="None", embed_shape=512, depth=[2, 2, 6, 2]):
+def create_htsat_model(
+    audio_cfg,
+    enable_fusion=False,
+    fusion_type="None",
+    embed_shape=512,
+    depth=[2, 2, 6, 2],
+):
     try:
-
         assert audio_cfg.model_name in [
             "tiny",
             "base",

@@ -54,7 +54,6 @@ def infer_text():
 
 
 def infer_audio():
-
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     precision = "fp32"
     amodel = "HTSAT-tiny"  # or 'PANN-14'

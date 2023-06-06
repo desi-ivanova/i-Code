@@ -12,12 +12,9 @@ from omegaconf import DictConfig
 REGISTRIES = {}
 
 
-def setup_registry(registry_name: str,
-                   base_class=None,
-                   default=None,
-                   required=False):
-    assert registry_name.startswith('--')
-    registry_name = registry_name[2:].replace('-', '_')
+def setup_registry(registry_name: str, base_class=None, default=None, required=False):
+    assert registry_name.startswith("--")
+    registry_name = registry_name[2:].replace("-", "_")
 
     REGISTRY = {}
     REGISTRY_CLASS_NAMES = set()
@@ -27,14 +24,12 @@ def setup_registry(registry_name: str,
     if registry_name in REGISTRIES:
         return  # registry already exists
     REGISTRIES[registry_name] = {
-        'registry': REGISTRY,
-        'default': default,
-        'dataclass_registry': DATACLASS_REGISTRY,
+        "registry": REGISTRY,
+        "default": default,
+        "dataclass_registry": DATACLASS_REGISTRY,
     }
 
-    def build_x(cfg: Union[DictConfig, str, Namespace], *extra_args,
-                **extra_kwargs):
-
+    def build_x(cfg: Union[DictConfig, str, Namespace], *extra_args, **extra_kwargs):
         assert isinstance(cfg, str)
         choice = cfg
         if choice in DATACLASS_REGISTRY:
@@ -42,12 +37,12 @@ def setup_registry(registry_name: str,
 
         if choice is None:
             if required:
-                raise ValueError('{} is required!'.format(registry_name))
+                raise ValueError("{} is required!".format(registry_name))
             return None
 
         cls = REGISTRY[choice]
-        if hasattr(cls, 'build_' + registry_name):
-            builder = getattr(cls, 'build_' + registry_name)
+        if hasattr(cls, "build_" + registry_name):
+            builder = getattr(cls, "build_" + registry_name)
         else:
             builder = cls
         return builder(cfg, *extra_args, **extra_kwargs)
@@ -55,15 +50,19 @@ def setup_registry(registry_name: str,
     def register_x(name, dataclass=None):
         def register_x_cls(cls):
             if name in REGISTRY:
-                raise ValueError('Cannot register duplicate {} ({})'.format(
-                    registry_name, name))
+                raise ValueError(
+                    "Cannot register duplicate {} ({})".format(registry_name, name)
+                )
             if cls.__name__ in REGISTRY_CLASS_NAMES:
                 raise ValueError(
-                    'Cannot register {} with duplicate class name ({})'.format(
-                        registry_name, cls.__name__))
+                    "Cannot register {} with duplicate class name ({})".format(
+                        registry_name, cls.__name__
+                    )
+                )
             if base_class is not None and not issubclass(cls, base_class):
-                raise ValueError('{} must extend {}'.format(
-                    cls.__name__, base_class.__name__))
+                raise ValueError(
+                    "{} must extend {}".format(cls.__name__, base_class.__name__)
+                )
 
             cls.__dataclass = dataclass
             if cls.__dataclass is not None:
@@ -72,10 +71,9 @@ def setup_registry(registry_name: str,
                 cs = ConfigStore.instance()
                 node = dataclass()
                 node._name = name
-                cs.store(name=name,
-                         group=registry_name,
-                         node=node,
-                         provider='layoutlmft')
+                cs.store(
+                    name=name, group=registry_name, node=node, provider="layoutlmft"
+                )
 
             REGISTRY[name] = cls
 

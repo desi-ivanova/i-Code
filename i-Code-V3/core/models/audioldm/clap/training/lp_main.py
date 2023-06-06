@@ -272,7 +272,6 @@ def config_lp_optimizer(model, data, args):
                     )
                     hvd.broadcast_optimizer_state(new_params_optimizer, root_rank=0)
             else:
-
                 optimizer["clap"] = get_optimizer(
                     [
                         {"params": gain_or_bias_params, "weight_decay": 0.0},

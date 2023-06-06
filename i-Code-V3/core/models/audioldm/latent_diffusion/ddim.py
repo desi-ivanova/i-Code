@@ -271,7 +271,6 @@ class DDIMSampler(object):
         unconditional_conditioning=None,
         use_original_steps=False,
     ):
-
         timesteps = (
             np.arange(self.ddpm_num_timesteps)
             if use_original_steps

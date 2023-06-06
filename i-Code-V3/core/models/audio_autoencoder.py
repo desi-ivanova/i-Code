@@ -1,40 +1,45 @@
 import torch
 from core.models.audioldm.latent_diffusion.ema import *
 from core.models.audioldm.variational_autoencoder.modules import Encoder, Decoder
-from core.models.audioldm.variational_autoencoder.distributions import DiagonalGaussianDistribution
+from core.models.audioldm.variational_autoencoder.distributions import (
+    DiagonalGaussianDistribution,
+)
 
 from core.models.audioldm.hifigan.utilities import get_vocoder, vocoder_infer
-        
+
 from core.models.audioldm.audio.tools import wav_to_fbank
 from core.models.audioldm.audio.stft import TacotronSTFT
+
+
 def ddconfig():
     return {
-#     "first_stage_config": {
-#         "base_learning_rate": 4.5e-05,
-#         "target": "audioldm.variational_autoencoder.autoencoder.AutoencoderKL",
-#         "params": {
-#             "monitor": "val/rec_loss",
-#             "image_key": "fbank",
-#             "subband": 1,
-#             "embed_dim": 8,
-#             "time_shuffle": 1,
-#             "ddconfig": {
-                "double_z": True,
-                "z_channels": 8,
-                "resolution": 256,
-                "downsample_time": False,
-                "in_channels": 1,
-                "out_ch": 1,
-                "ch": 128,
-                "ch_mult": [1, 2, 4],
-                "num_res_blocks": 2,
-                "attn_resolutions": [],
-                "dropout": 0.0,
-#             },
-#         },
-#     },
-}
-   
+        #     "first_stage_config": {
+        #         "base_learning_rate": 4.5e-05,
+        #         "target": "audioldm.variational_autoencoder.autoencoder.AutoencoderKL",
+        #         "params": {
+        #             "monitor": "val/rec_loss",
+        #             "image_key": "fbank",
+        #             "subband": 1,
+        #             "embed_dim": 8,
+        #             "time_shuffle": 1,
+        #             "ddconfig": {
+        "double_z": True,
+        "z_channels": 8,
+        "resolution": 256,
+        "downsample_time": False,
+        "in_channels": 1,
+        "out_ch": 1,
+        "ch": 128,
+        "ch_mult": [1, 2, 4],
+        "num_res_blocks": 2,
+        "attn_resolutions": [],
+        "dropout": 0.0,
+        #             },
+        #         },
+        #     },
+    }
+
+
 class AudioAutoencoderKL(nn.Module):
     def __init__(
         self,
@@ -75,16 +80,20 @@ class AudioAutoencoderKL(nn.Module):
         self.mean, self.std = None, None
 
     def encode(self, x, time=10.0):
-#         if next(self.parameters()).dtype = torch.float16:
-#             self = self.float()
+        #         if next(self.parameters()).dtype = torch.float16:
+        #             self = self.float()
         temp_dtype = x.dtype
-        x = wav_to_fbank(
+        x = (
+            wav_to_fbank(
                 x.float(), target_length=int(time * 102.4), fn_STFT=self.fn_STFT.float()
-            ).to(x.device).to(temp_dtype)
+            )
+            .to(x.device)
+            .to(temp_dtype)
+        )
         x = self.freq_split_subband(x)
         h = self.encoder(x)
         moments = self.quant_conv(h)
-#         .to(temp_dtype)
+        #         .to(temp_dtype)
         posterior = DiagonalGaussianDistribution(moments)
         return posterior
 
@@ -100,7 +109,6 @@ class AudioAutoencoderKL(nn.Module):
         return wav_reconstruction
 
     def forward(self, input, sample_posterior=True):
-        
         posterior = self.encode(input)
         if sample_posterior:
             z = posterior.sample()

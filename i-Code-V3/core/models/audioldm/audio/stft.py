@@ -66,7 +66,9 @@ class STFT(torch.nn.Module):
 
         forward_transform = F.conv1d(
             input_data,
-            torch.autograd.Variable(self.forward_basis, requires_grad=False).to(input_data.dtype),
+            torch.autograd.Variable(self.forward_basis, requires_grad=False).to(
+                input_data.dtype
+            ),
             stride=self.hop_length,
             padding=0,
         ).cpu()
@@ -87,7 +89,9 @@ class STFT(torch.nn.Module):
 
         inverse_transform = F.conv_transpose1d(
             recombine_magnitude_phase,
-            torch.autograd.Variable(self.inverse_basis, requires_grad=False).to(input_data.dtype),
+            torch.autograd.Variable(self.inverse_basis, requires_grad=False).to(
+                input_data.dtype
+            ),
             stride=self.hop_length,
             padding=0,
         )

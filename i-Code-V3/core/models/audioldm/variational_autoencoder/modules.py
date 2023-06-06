@@ -204,9 +204,9 @@ class AttnBlock(nn.Module):
     def forward(self, x):
         dtype = x.dtype
         h_ = x
-        
+
         h_ = self.norm(h_)
-        
+
         q = self.q(h_)
         k = self.k(h_)
         v = self.v(h_)
@@ -215,7 +215,9 @@ class AttnBlock(nn.Module):
         q = q.reshape(b, c, h * w).contiguous()
         q = q.permute(0, 2, 1).contiguous()  # b,hw,c
         k = k.reshape(b, c, h * w).contiguous()  # b,c,hw
-        w_ = torch.bmm(q, k).contiguous().to(dtype)  # b,hw,hw    w[b,i,j]=sum_c q[b,i,c]k[b,c,j]
+        w_ = (
+            torch.bmm(q, k).contiguous().to(dtype)
+        )  # b,hw,hw    w[b,i,j]=sum_c q[b,i,c]k[b,c,j]
         w_ = w_ * (int(c) ** (-0.5))
         w_ = torch.nn.functional.softmax(w_, dim=2)
         # attend to values
@@ -515,7 +517,7 @@ class Encoder(nn.Module):
             stride=1,
             padding=1,
         )
-        
+
         self.swapped_to_float = False
 
     def forward(self, x):
@@ -532,8 +534,7 @@ class Encoder(nn.Module):
                 hs.append(h)
             if i_level != self.num_resolutions - 1:
                 hs.append(self.down[i_level].downsample(hs[-1]))
-    
-        
+
         # middle
         h = hs[-1]
         h = self.mid.block_1(h, temb)
@@ -544,9 +545,9 @@ class Encoder(nn.Module):
         h = self.mid.block_2(h, temb)
         # end
         h = self.norm_out(h)
-        
+
         h = nonlinearity(h)
-        
+
         h = self.conv_out(h)
         return h
 
@@ -1045,12 +1046,12 @@ class FirstStagePostProcessor(nn.Module):
         self.model = nn.ModuleList(blocks)
         self.downsampler = nn.ModuleList(downs)
 
-#     def instantiate_pretrained(self, config):
-#         model = instantiate_from_config(config)
-#         self.pretrained_model = model.eval()
-#         # self.pretrained_model.train = False
-#         for param in self.pretrained_model.parameters():
-#             param.requires_grad = False
+    #     def instantiate_pretrained(self, config):
+    #         model = instantiate_from_config(config)
+    #         self.pretrained_model = model.eval()
+    #         # self.pretrained_model.train = False
+    #         for param in self.pretrained_model.parameters():
+    #             param.requires_grad = False
 
     @torch.no_grad()
     def encode_with_pretrained(self, x):

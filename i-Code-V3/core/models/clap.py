@@ -97,18 +97,15 @@ class CLAPAudioEmbeddingClassifierFreev2(nn.Module):
             return similarity.squeeze()
 
     def forward(self, batch, key=None):
-
         # the 'fusion' truncate mode can be changed to 'rand_trunc' if run in unfusion mode
         if self.embed_mode == "audio":
             audio_dict_list = []
-            assert (
-                self.sampling_rate == 16000
-            ), "We only support 16000 sampling rate"
+            assert self.sampling_rate == 16000, "We only support 16000 sampling rate"
             # batch: [bs, 1, t-samples]
             batch = torchaudio.functional.resample(
                 batch, orig_freq=self.sampling_rate, new_freq=48000
             )
-            
+
             for waveform in self.batch_to_list(batch):
                 audio_dict = {}
                 audio_dict = get_audio_features(

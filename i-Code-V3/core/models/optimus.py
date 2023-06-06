@@ -11,24 +11,38 @@ from core.models.common import utils
 
 from .optimus_models.tokenization_gpt2 import GPT2Tokenizer
 
-version = '0'
-symbol = 'optimus'
+version = "0"
+symbol = "optimus"
 
-@register('optimus_vae', version)
+
+@register("optimus_vae", version)
 class optimus_vae(nn.Module):
     """VAE with normal prior"""
-    def __init__(self, encoder, decoder,  tokenizer_encoder, tokenizer_decoder, args): # 
-        super().__init__()
-        self.encoder = encoder if isinstance(encoder, nn.Module) else get_model()(encoder)
-        self.decoder = decoder if isinstance(decoder, nn.Module) else get_model()(decoder)
-        self.tokenizer_encoder = tokenizer_encoder \
-            if isinstance(tokenizer_encoder, nn.Module) \
-                else get_model()(tokenizer_encoder, verbose=False)
-        self.tokenizer_decoder = tokenizer_decoder \
-            if isinstance(tokenizer_decoder, nn.Module) \
-                else get_model()(tokenizer_decoder, verbose=False)
 
-        gpt2_special_tokens_dict = {'pad_token': '<PAD>', 'bos_token': '<BOS>', 'eos_token': '<EOS>'}
+    def __init__(self, encoder, decoder, tokenizer_encoder, tokenizer_decoder, args):  #
+        super().__init__()
+        self.encoder = (
+            encoder if isinstance(encoder, nn.Module) else get_model()(encoder)
+        )
+        self.decoder = (
+            decoder if isinstance(decoder, nn.Module) else get_model()(decoder)
+        )
+        self.tokenizer_encoder = (
+            tokenizer_encoder
+            if isinstance(tokenizer_encoder, nn.Module)
+            else get_model()(tokenizer_encoder, verbose=False)
+        )
+        self.tokenizer_decoder = (
+            tokenizer_decoder
+            if isinstance(tokenizer_decoder, nn.Module)
+            else get_model()(tokenizer_decoder, verbose=False)
+        )
+
+        gpt2_special_tokens_dict = {
+            "pad_token": "<PAD>",
+            "bos_token": "<BOS>",
+            "eos_token": "<EOS>",
+        }
         if isinstance(self.tokenizer_encoder, GPT2Tokenizer):
             self.tokenizer_encoder.add_special_tokens(gpt2_special_tokens_dict)
         if isinstance(self.tokenizer_decoder, GPT2Tokenizer):
@@ -38,9 +52,11 @@ class optimus_vae(nn.Module):
         self.nz = args.latent_size
 
         self.eos_token_id = self.tokenizer_decoder.convert_tokens_to_ids(
-            [self.tokenizer_decoder.eos_token])[0]
+            [self.tokenizer_decoder.eos_token]
+        )[0]
         self.pad_token_id = self.tokenizer_decoder.convert_tokens_to_ids(
-            [self.tokenizer_decoder.pad_token])[0]
+            [self.tokenizer_decoder.pad_token]
+        )[0]
 
         # connector: from Bert hidden units to the latent space
         # self.linear = nn.Linear(args.nz, 2 * args.nz, bias=False)
@@ -82,7 +98,7 @@ class optimus_vae(nn.Module):
         # pdb.set_trace()
         # mean, logvar = mean.squeeze(0), logvar.squeeze(0)
 
-        logvar.fill_(.0)
+        logvar.fill_(0.0)
         # (batch, nsamples, nz)
         z = self.reparameterize(mean, logvar, nsamples)
         KL = 0.5 * (mean.pow(2) + logvar.exp() - logvar - 1).sum(dim=1)
@@ -110,31 +126,39 @@ class optimus_vae(nn.Module):
         return mu_expd + torch.mul(eps, std_expd)
 
     def forward(self, inputs, labels):
+        # pdb.set_trace()
 
-        # pdb.set_trace()   
-        
-        attention_mask=(inputs > 0).float()
+        attention_mask = (inputs > 0).float()
         # logger.info(inputs)
         # logger.info(attention_mask)
         # logger.info(labels)
-        reconstrution_mask=(labels != 50257).float() # 50257 is the padding token for GPT2
+        reconstrution_mask = (
+            labels != 50257
+        ).float()  # 50257 is the padding token for GPT2
         sent_length = torch.sum(reconstrution_mask, dim=1)
 
-        
         outputs = self.encoder(inputs, attention_mask)
-        pooled_hidden_fea = outputs[1]  # model outputs are always tuple in pytorch-transformers (see doc)
+        pooled_hidden_fea = outputs[
+            1
+        ]  # model outputs are always tuple in pytorch-transformers (see doc)
 
-        if self.args.fb_mode==0: 
+        if self.args.fb_mode == 0:
             # Connect hidden feature to the latent space
             latent_z, loss_kl = self.connect(pooled_hidden_fea)
             latent_z = latent_z.squeeze(1)
 
-            
             # Decoding
-            outputs = self.decoder(input_ids=labels, past=latent_z, labels=labels, label_ignore=self.pad_token_id)
-            loss_rec = outputs[0]  # model outputs are always tuple in pytorch-transformers (see doc)
-    
-        elif self.args.fb_mode==1:  
+            outputs = self.decoder(
+                input_ids=labels,
+                past=latent_z,
+                labels=labels,
+                label_ignore=self.pad_token_id,
+            )
+            loss_rec = outputs[
+                0
+            ]  # model outputs are always tuple in pytorch-transformers (see doc)
+
+        elif self.args.fb_mode == 1:
             # Connect hidden feature to the latent space
             mu, logvar = self.encoder.linear(pooled_hidden_fea).chunk(2, -1)
             latent_z = self.reparameterize(mu, logvar, nsamples=1)
@@ -146,26 +170,38 @@ class optimus_vae(nn.Module):
             # pdb.set_trace()
             # past = self.decoder.linear(latent_z)
             # Decoding
-            outputs = self.decoder(input_ids=labels, past=latent_z, labels=labels, label_ignore=self.pad_token_id)
-            loss_rec = outputs[0]  # model outputs are always tuple in pytorch-transformers (see doc)
+            outputs = self.decoder(
+                input_ids=labels,
+                past=latent_z,
+                labels=labels,
+                label_ignore=self.pad_token_id,
+            )
+            loss_rec = outputs[
+                0
+            ]  # model outputs are always tuple in pytorch-transformers (see doc)
 
-        elif self.args.fb_mode==2: 
+        elif self.args.fb_mode == 2:
             # Connect hidden feature to the latent space
             latent_z, loss_kl = self.connect_deterministic(pooled_hidden_fea)
             latent_z = latent_z.squeeze(1)
 
             # past = self.decoder.linear(latent_z)
             # Decoding
-            outputs = self.decoder(input_ids=labels, past=latent_z, labels=labels, label_ignore=self.pad_token_id)
-            loss_rec = outputs[0]  # model outputs are always tuple in pytorch-transformers (see doc)
+            outputs = self.decoder(
+                input_ids=labels,
+                past=latent_z,
+                labels=labels,
+                label_ignore=self.pad_token_id,
+            )
+            loss_rec = outputs[
+                0
+            ]  # model outputs are always tuple in pytorch-transformers (see doc)
 
-            
         # pdb.set_trace()
         if self.args.length_weighted_loss:
             loss = loss_rec / sent_length + self.args.beta * loss_kl
         else:
-            loss = loss_rec + self.args.beta * loss_kl 
-
+            loss = loss_rec + self.args.beta * loss_kl
 
         return loss_rec, loss_kl, loss
 
@@ -235,7 +271,9 @@ class optimus_vae(nn.Module):
             log_p: (batch_size, n_sample).
                 log_p(x|z) across different x and z
         """
-        outputs = self.decoder(input_ids=x, past=z, labels=x, label_ignore=self.pad_token_id)
+        outputs = self.decoder(
+            input_ids=x, past=z, labels=x, label_ignore=self.pad_token_id
+        )
         loss_rec = outputs[0]
         return -loss_rec
 
@@ -257,7 +295,6 @@ class optimus_vae(nn.Module):
         # (batch_size, nz)
 
         mu, logvar = self.encoder.linear(bert_fea).chunk(2, -1)
-        
 
         ##################
         # compute KL
@@ -268,36 +305,34 @@ class optimus_vae(nn.Module):
         # mu, logvar = mu.squeeze(0), logvar.squeeze(0)
         ll_tmp, rc_tmp = [], []
         for _ in range(int(nsamples / ns)):
-
             # (batch, nsamples, nz)
             z = self.reparameterize(mu, logvar, ns)
             # past = self.decoder.linear(z)
             past = z
-         
+
             # [batch, nsamples]
             log_prior = self.eval_prior_dist(z)
             log_gen = self.eval_cond_ll(x1, past)
             log_infer = self.eval_inference_dist(z, (mu, logvar))
 
             # pdb.set_trace()
-            log_gen = log_gen.unsqueeze(0).contiguous().view(z.shape[0],-1)
-
+            log_gen = log_gen.unsqueeze(0).contiguous().view(z.shape[0], -1)
 
             # pdb.set_trace()
             rc_tmp.append(log_gen)
             ll_tmp.append(log_gen + log_prior - log_infer)
 
-            
-        
-        log_prob_iw = log_sum_exp(torch.cat(ll_tmp, dim=-1), dim=-1) - math.log(nsamples)
+        log_prob_iw = log_sum_exp(torch.cat(ll_tmp, dim=-1), dim=-1) - math.log(
+            nsamples
+        )
         log_gen_iw = torch.mean(torch.cat(rc_tmp, dim=-1), dim=-1)
 
-        return log_prob_iw, log_gen_iw , KL
+        return log_prob_iw, log_gen_iw, KL
 
     def nll_iw(self, x0, x1, nsamples, ns=1):
         """compute the importance weighting estimate of the log-likelihood
         Args:
-            x0, x1:  two different tokenization results of x, where x is the data tensor with shape (batch, *). 
+            x0, x1:  two different tokenization results of x, where x is the data tensor with shape (batch, *).
             nsamples: Int
                 the number of samples required to estimate marginal data likelihood
         Returns: Tensor1
@@ -309,7 +344,7 @@ class optimus_vae(nn.Module):
         # nsamples = 500, ns = 10
 
         # TODO: note that x is forwarded twice in self.encoder.sample(x, ns) and self.eval_inference_dist(x, z, param)
-        #.      this problem is to be solved in order to speed up
+        # .      this problem is to be solved in order to speed up
 
         tmp = []
         for _ in range(int(nsamples / ns)):
@@ -366,13 +401,17 @@ class optimus_vae(nn.Module):
         return log_prior + log_gen
 
     def eval_cond_ll(self, x, z):
-        """compute log p(x|z)
-        """
+        """compute log p(x|z)"""
         x_shape = list(x.size())
         z_shape = list(z.size())
         if len(z_shape) == 3:
-            x = x.unsqueeze(1).repeat(1, z_shape[1], 1).contiguous().view(x_shape[0]*z_shape[1], x_shape[-1]) 
-            z = z.contiguous().view(x_shape[0]*z_shape[1], z_shape[-1]) 
+            x = (
+                x.unsqueeze(1)
+                .repeat(1, z_shape[1], 1)
+                .contiguous()
+                .view(x_shape[0] * z_shape[1], x_shape[-1])
+            )
+            z = z.contiguous().view(x_shape[0] * z_shape[1], z_shape[-1])
 
         return self.log_probability(x, z)
 
@@ -427,8 +466,9 @@ class optimus_vae(nn.Module):
         total_iter = self.args.mh_burn_in + nsamples * self.args.mh_thin
         samples = []
         for iter_ in range(total_iter):
-            next = torch.normal(mean=cur,
-                std=cur.new_full(size=cur.size(), fill_value=self.args.mh_std))
+            next = torch.normal(
+                mean=cur, std=cur.new_full(size=cur.size(), fill_value=self.args.mh_std)
+            )
             # [batch_size, 1]
             next_ll = self.eval_complete_ll(x, next)
             ratio = next_ll - cur_ll
@@ -444,7 +484,10 @@ class optimus_vae(nn.Module):
             cur = mask_ * next + (1 - mask_) * cur
             cur_ll = mask * next_ll + (1 - mask) * cur_ll
 
-            if iter_ >= self.args.mh_burn_in and (iter_ - self.args.mh_burn_in) % self.args.mh_thin == 0:
+            if (
+                iter_ >= self.args.mh_burn_in
+                and (iter_ - self.args.mh_burn_in) % self.args.mh_thin == 0
+            ):
                 samples.append(cur.unsqueeze(1))
 
         return torch.cat(samples, dim=1)
@@ -497,23 +540,23 @@ class optimus_vae(nn.Module):
         dev = z - mu
 
         # (batch_size, nsamples)
-        log_density = -0.5 * ((dev ** 2) / var).sum(dim=-1) - \
-            0.5 * (nz * math.log(2 * math.pi) + logvar.sum(-1))
+        log_density = -0.5 * ((dev**2) / var).sum(dim=-1) - 0.5 * (
+            nz * math.log(2 * math.pi) + logvar.sum(-1)
+        )
 
         return log_density
 
     def calc_mi(self, test_data_batch, args):
         # calc_mi_v3
-        import math 
+        import math
         from modules.utils import log_sum_exp
 
         mi = 0
         num_examples = 0
 
         mu_batch_list, logvar_batch_list = [], []
-        neg_entropy = 0.
+        neg_entropy = 0.0
         for batch_data in test_data_batch:
-
             x0, _, _ = batch_data
             x0 = x0.to(args.device)
 
@@ -525,13 +568,17 @@ class optimus_vae(nn.Module):
 
             x_batch, nz = mu.size()
 
-            #print(x_batch, end=' ')
+            # print(x_batch, end=' ')
 
             num_examples += x_batch
 
             # E_{q(z|x)}log(q(z|x)) = -0.5*nz*log(2*\pi) - 0.5*(1+logvar).sum(-1)
 
-            neg_entropy += (-0.5 * nz * math.log(2 * math.pi)- 0.5 * (1 + logvar).sum(-1)).sum().item()
+            neg_entropy += (
+                (-0.5 * nz * math.log(2 * math.pi) - 0.5 * (1 + logvar).sum(-1))
+                .sum()
+                .item()
+            )
             mu_batch_list += [mu.cpu()]
             logvar_batch_list += [logvar.cpu()]
 
@@ -541,13 +588,13 @@ class optimus_vae(nn.Module):
         ##print()
 
         num_examples = 0
-        log_qz = 0.
+        log_qz = 0.0
         for i in range(len(mu_batch_list)):
             ###############
             # get z_samples
             ###############
             mu, logvar = mu_batch_list[i].cuda(), logvar_batch_list[i].cuda()
-            
+
             # [z_batch, 1, nz]
 
             z_samples = self.reparameterize(mu, logvar, 1)
@@ -559,8 +606,8 @@ class optimus_vae(nn.Module):
             # compute density
             ###############
             # [1, x_batch, nz]
-            #mu, logvar = mu_batch_list[i].cuda(), logvar_batch_list[i].cuda()
-            #indices = list(np.random.choice(np.arange(len(mu_batch_list)), 10)) + [i]
+            # mu, logvar = mu_batch_list[i].cuda(), logvar_batch_list[i].cuda()
+            # indices = list(np.random.choice(np.arange(len(mu_batch_list)), 10)) + [i]
             indices = np.arange(len(mu_batch_list))
             mu = torch.cat([mu_batch_list[_] for _ in indices], dim=0).cuda()
             logvar = torch.cat([logvar_batch_list[_] for _ in indices], dim=0).cuda()
@@ -573,8 +620,9 @@ class optimus_vae(nn.Module):
             dev = z_samples - mu
 
             # (z_batch, x_batch)
-            log_density = -0.5 * ((dev ** 2) / var).sum(dim=-1) - \
-                0.5 * (nz * math.log(2 * math.pi) + logvar.sum(-1))
+            log_density = -0.5 * ((dev**2) / var).sum(dim=-1) - 0.5 * (
+                nz * math.log(2 * math.pi) + logvar.sum(-1)
+            )
 
             # log q(z): aggregate posterior
             # [z_batch]
@@ -586,11 +634,9 @@ class optimus_vae(nn.Module):
         return mi
 
     def calc_au(self, eval_dataloader, args, delta=0.01):
-        """compute the number of active units
-        """
+        """compute the number of active units"""
         cnt = 0
         for batch_data in eval_dataloader:
-
             x0, _, _ = batch_data
             x0 = x0.to(args.device)
 
@@ -611,7 +657,6 @@ class optimus_vae(nn.Module):
 
         cnt = 0
         for batch_data in eval_dataloader:
-
             x0, _, _ = batch_data
             x0 = x0.to(args.device)
 
@@ -632,54 +677,68 @@ class optimus_vae(nn.Module):
 
         return (au_var >= delta).sum().item(), au_var
 
+
 from .optimus_models.optimus_bert import BertForLatentConnector_XX
 
-@register('optimus_bert_connector', version)
+
+@register("optimus_bert_connector", version)
 class optimus_bert_connector(BertForLatentConnector_XX):
     pass
 
+
 from .optimus_models.tokenization_bert import BertTokenizer
 
-@register('optimus_bert_tokenizer', version)
+
+@register("optimus_bert_tokenizer", version)
 class optimus_bert_tokenizer(BertTokenizer):
     pass
 
+
 from .optimus_models.optimus_gpt2 import GPT2ForLatentConnector_XX
 
-@register('optimus_gpt2_connector', version)
+
+@register("optimus_gpt2_connector", version)
 class optimus_gpt2_connector(GPT2ForLatentConnector_XX):
     pass
 
+
 from .optimus_models.tokenization_gpt2 import GPT2Tokenizer
 
-@register('optimus_gpt2_tokenizer', version)
+
+@register("optimus_gpt2_tokenizer", version)
 class optimus_gpt2_tokenizer(GPT2Tokenizer):
     pass
+
 
 ##############################
 # some helpers for inference #
 ##############################
 
+
 def sample_single_sequence_conditional(
-        model,
-        context,
-        past=None,
-        temperature=1,
-        top_k=0, 
-        top_p=0.0, 
-        eos_token=50829, 
-        max_length=30, ):
-    
+    model,
+    context,
+    past=None,
+    temperature=1,
+    top_k=0,
+    top_p=0.0,
+    eos_token=50829,
+    max_length=30,
+):
     past = past.unsqueeze(0)
     generated = context.unsqueeze(0)
     with torch.no_grad():
         while True:
-        # for _ in trange(length):
-            inputs = {'input_ids': generated, 'past': past}
+            # for _ in trange(length):
+            inputs = {"input_ids": generated, "past": past}
             outputs = model(**inputs)
             next_token_logits = outputs[0][0, -1, :] / temperature
-            filtered_logits = top_k_top_p_filtering(next_token_logits, top_k=top_k, top_p=top_p)
-            next_token = torch.multinomial(F.softmax(filtered_logits, dim=-1), num_samples=1)
+            filtered_logits = top_k_top_p_filtering(
+                next_token_logits, top_k=top_k, top_p=top_p
+            )
+            next_token = torch.multinomial(
+                F.softmax(filtered_logits, dim=-1), num_samples=1
+            )
             generated = torch.cat((generated, next_token.unsqueeze(0)), dim=1)
             if next_token[0].item() == eos_token:
                 break
@@ -688,16 +747,19 @@ def sample_single_sequence_conditional(
                 break
     return generated.squeeze(0)
 
-def top_k_top_p_filtering(logits, top_k=0, top_p=0.0, filter_value=-float('Inf')):
-    """ Filter a distribution of logits using top-k and/or nucleus (top-p) filtering
-        Args:
-            logits: logits distribution shape (vocabulary size)
-            top_k > 0: keep only top k tokens with highest probability (top-k filtering).
-            top_p > 0.0: keep the top tokens with cumulative probability >= top_p (nucleus filtering).
-                Nucleus filtering is described in Holtzman et al. (http://arxiv.org/abs/1904.09751)
-        From: https://gist.github.com/thomwolf/1a5a29f6962089e871b94cbd09daf317
+
+def top_k_top_p_filtering(logits, top_k=0, top_p=0.0, filter_value=-float("Inf")):
+    """Filter a distribution of logits using top-k and/or nucleus (top-p) filtering
+    Args:
+        logits: logits distribution shape (vocabulary size)
+        top_k > 0: keep only top k tokens with highest probability (top-k filtering).
+        top_p > 0.0: keep the top tokens with cumulative probability >= top_p (nucleus filtering).
+            Nucleus filtering is described in Holtzman et al. (http://arxiv.org/abs/1904.09751)
+    From: https://gist.github.com/thomwolf/1a5a29f6962089e871b94cbd09daf317
     """
-    assert logits.dim() == 1  # batch size 1 for now - could be updated for more but the code would be less clear
+    assert (
+        logits.dim() == 1
+    )  # batch size 1 for now - could be updated for more but the code would be less clear
     top_k = min(top_k, logits.size(-1))  # Safety check
     if top_k > 0:
         # Remove all tokens with a probability less than the last token of the top-k
